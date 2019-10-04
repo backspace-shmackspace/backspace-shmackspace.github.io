@@ -1,6 +1,7 @@
 ---
 layout: single
 title: Ghoul - Hack The Box
+published: false
 excerpt: "This box is brutal, just brutal… it starts out being fun, but I will tell you now 
 that it’s not for the faint of heart. I anticipate that this writeup will be my longest one yet."
 date: 2019-10-05
