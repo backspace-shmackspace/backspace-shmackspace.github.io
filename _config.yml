@@ -15,7 +15,7 @@ remote_theme             : "mmistakes/minimal-mistakes@4.15.1"
 minimal_mistakes_skin    : "haxor2" # "air", "aqua", "contrast", "dark", "dirt", "neon", "mint", "plum", "sunrise"
 
 # Site Settings
-#future                   : true
+future                   : false
 locale                   : "en-US"
 title                    : "backspace-shmackspace.github.io"
 title_separator          : "-"
